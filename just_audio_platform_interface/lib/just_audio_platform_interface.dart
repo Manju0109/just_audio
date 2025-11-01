@@ -106,6 +106,10 @@ abstract class AudioPlayerPlatform {
     throw UnimplementedError("setPitch() has not been implemented.");
   }
 
+  /// Changes the karaoke mix level (0.0 = off, 1.0 = full attenuation).
+  Future<SetKaraokeLevelResponse> setKaraokeLevel(
+      SetKaraokeLevelRequest request);
+
   /// Sets skipSilence to true/false.
   Future<SetSkipSilenceResponse> setSkipSilence(SetSkipSilenceRequest request) {
     throw UnimplementedError("setSkipSilence() has not been implemented.");
@@ -588,7 +592,27 @@ class SetPitchRequest {
 /// pitch.
 class SetPitchResponse {
   static SetPitchResponse fromMap(Map<dynamic, dynamic> map) =>
-      SetPitchResponse();
+    SetPitchResponse();
+}
+
+/// Information communicated to the platform implementation when setting the
+/// karaoke level.
+class SetKaraokeLevelRequest {
+  final double level;
+
+  SetKaraokeLevelRequest({required this.level});
+
+  Map<String, dynamic> toMap() => {'level': level};
+}
+
+/// Information returned by the platform implementation after setting the
+/// karaoke level.
+class SetKaraokeLevelResponse {
+  SetKaraokeLevelResponse();
+
+  factory SetKaraokeLevelResponse.fromMap(Map<String, dynamic> map) {
+    return SetKaraokeLevelResponse();
+  }
 }
 
 /// Information communicated to the platform implementation when setting the

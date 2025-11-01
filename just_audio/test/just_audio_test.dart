@@ -11,7 +11,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_platform_interface/just_audio_platform_interface.dart';
 import 'package:mockito/mockito.dart';
-import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart'
+    show MockPlatformInterfaceMixin;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -1808,6 +1809,7 @@ class MockAudioPlayer extends AudioPlayerPlatform {
   int? _errorCode;
   String? _errorMessage;
   Completer<void>? _loadBlock;
+  double _karaokeLevel = 0.0;
 
   MockAudioPlayer(InitRequest request)
       : audioLoadConfiguration = request.audioLoadConfiguration,
@@ -1991,6 +1993,13 @@ class MockAudioPlayer extends AudioPlayerPlatform {
   @override
   Future<SetPitchResponse> setPitch(SetPitchRequest request) async {
     return SetPitchResponse();
+  }
+
+  @override
+  Future<SetKaraokeLevelResponse> setKaraokeLevel(
+      SetKaraokeLevelRequest request) async {
+    _karaokeLevel = request.level;
+    return SetKaraokeLevelResponse();
   }
 
   @override

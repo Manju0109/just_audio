@@ -8,6 +8,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio_platform_interface/just_audio_platform_interface.dart';
+import 'package:just_audio_platform_interface/method_channel_just_audio.dart';
 import 'package:meta/meta.dart' show experimental;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -146,6 +147,7 @@ class AudioPlayer {
   final _volumeSubject = BehaviorSubject.seeded(1.0);
   final _speedSubject = BehaviorSubject.seeded(1.0);
   final _pitchSubject = BehaviorSubject.seeded(1.0);
+  final _karaokeLevelSubject = BehaviorSubject.seeded(0.0);
   final _skipSilenceEnabledSubject = BehaviorSubject.seeded(false);
 
   final _positionDiscontinuitySubject =
@@ -509,6 +511,12 @@ class AudioPlayer {
 
   /// A stream of current pitch factor values.
   Stream<double> get pitchStream => _pitchSubject.stream;
+
+  /// The current karaoke mix level (0.0 = off, 1.0 = aggressive removal).
+  double get karaokeLevel => _karaokeLevelSubject.nvalue!;
+
+  /// A stream of karaoke mix level updates.
+  Stream<double> get karaokeLevelStream => _karaokeLevelSubject.stream;
 
   /// The current skipSilenceEnabled factor of the player.
   bool get skipSilenceEnabled => _skipSilenceEnabledSubject.nvalue!;
@@ -1226,6 +1234,23 @@ class AudioPlayer {
     await (await _platform).setPitch(SetPitchRequest(pitch: pitch));
   }
 
+  /// Sets the karaoke vocal removal mix level (0.0 = off, 1.0 = max removal).
+  Future<void> setKaraokeLevel(final double level) async {
+    if (_disposed) return;
+    final clampedLevel = level.clamp(0.0, 1.0).toDouble();
+    final previousLevel = karaokeLevel;
+    if (clampedLevel == previousLevel) {
+      return;
+    }
+    _karaokeLevelSubject.add(clampedLevel);
+    try {
+      await (await _platform).setKaraokeLevel(SetKaraokeLevelRequest(level: clampedLevel));
+    } catch (e) {
+      _karaokeLevelSubject.add(previousLevel);
+      rethrow;
+    }
+  }
+
   /// Sets the [LoopMode]. Looping will be gapless on Android, iOS and macOS. On
   /// web, there will be a slight gap at the loop point.
   Future<void> setLoopMode(LoopMode mode) async {
@@ -1444,6 +1469,7 @@ class AudioPlayer {
       await _volumeSubject.close();
       await _speedSubject.close();
       await _pitchSubject.close();
+      await _karaokeLevelSubject.close();
 
       await _durationSubject.close();
       await _processingStateSubject.close();
@@ -1707,6 +1733,12 @@ class AudioPlayer {
           await platform.setPitch(SetPitchRequest(pitch: pitch));
         } catch (e) {
           // setPitch not supported on this platform.
+        }
+        if (checkInterruption()) return inactiveResult(platform);
+        try {
+          await platform.setKaraokeLevel(SetKaraokeLevelRequest(level: karaokeLevel));
+        } catch (e) {
+          // setKaraokeLevel not supported on this platform.
         }
         if (checkInterruption()) return inactiveResult(platform);
         try {
@@ -4104,6 +4136,12 @@ class _IdleAudioPlayer extends AudioPlayerPlatform {
   @override
   Future<SetPitchResponse> setPitch(SetPitchRequest request) async {
     return SetPitchResponse();
+  }
+
+  @override
+  Future<SetKaraokeLevelResponse> setKaraokeLevel(
+      SetKaraokeLevelRequest request) async {
+    return SetKaraokeLevelResponse();
   }
 
   @override

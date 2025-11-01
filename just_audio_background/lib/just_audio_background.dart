@@ -232,6 +232,13 @@ class _JustAudioPlayer extends AudioPlayerPlatform {
   }
 
   @override
+  Future<SetKaraokeLevelResponse> setKaraokeLevel(
+      SetKaraokeLevelRequest request) {
+    throw UnimplementedError(
+        'setKaraokeLevel() is not supported in just_audio_background.');
+  }
+
+  @override
   Future<SetSkipSilenceResponse> setSkipSilence(
       SetSkipSilenceRequest request) async {
     await _playerAudioHandler.customSetSkipSilence(request);
@@ -342,6 +349,22 @@ class _JustAudioPlayer extends AudioPlayerPlatform {
   Future<SetPreferredPeakBitRateResponse> setPreferredPeakBitRate(
           SetPreferredPeakBitRateRequest request) =>
       _playerAudioHandler.customSetPreferredPeakBitRate(request);
+}
+
+class SetKaraokeLevelRequest {
+  final double level;
+  
+  SetKaraokeLevelRequest({required this.level});
+  
+  Map<String, dynamic> toMap() => {'level': level};
+}
+
+class SetKaraokeLevelResponse {
+  SetKaraokeLevelResponse();
+  
+  factory SetKaraokeLevelResponse.fromMap(Map<String, dynamic> map) {
+    return SetKaraokeLevelResponse();
+  }
 }
 
 class _PlayerAudioHandler extends BaseAudioHandler

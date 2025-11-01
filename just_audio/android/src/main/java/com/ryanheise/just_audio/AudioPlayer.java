@@ -8,32 +8,40 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.C;
-import androidx.media3.exoplayer.DefaultLivePlaybackSpeedControl;
-import androidx.media3.exoplayer.DefaultLoadControl;
-import androidx.media3.exoplayer.DefaultRenderersFactory;
-import androidx.media3.exoplayer.ExoPlaybackException;
-import androidx.media3.exoplayer.LivePlaybackSpeedControl;
-import androidx.media3.exoplayer.LoadControl;
 import androidx.media3.common.MediaItem;
+import androidx.media3.common.Metadata;
+import androidx.media3.common.MimeTypes;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.PlaybackParameters;
 import androidx.media3.common.Player;
 import androidx.media3.common.Player.PositionInfo;
-import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.common.Timeline;
-import androidx.media3.common.Tracks;
+import androidx.media3.common.TrackGroup;
 import androidx.media3.common.TrackSelectionParameters;
 import androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences;
-import androidx.media3.common.AudioAttributes;
+import androidx.media3.common.Tracks;
+import androidx.media3.common.audio.AudioProcessor;
+import androidx.media3.datasource.DataSource;
+import androidx.media3.datasource.DefaultDataSource;
+import androidx.media3.datasource.DefaultHttpDataSource;
+import androidx.media3.exoplayer.DefaultLivePlaybackSpeedControl;
+import androidx.media3.exoplayer.DefaultLoadControl;
+import androidx.media3.exoplayer.DefaultRenderersFactory;
+import androidx.media3.exoplayer.ExoPlaybackException;
+import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.LivePlaybackSpeedControl;
+import androidx.media3.exoplayer.LoadControl;
 import androidx.media3.exoplayer.NoSampleRenderer;
 import androidx.media3.exoplayer.Renderer;
 import androidx.media3.exoplayer.RenderersFactory;
-import androidx.media3.extractor.DefaultExtractorsFactory;
-import androidx.media3.common.Metadata;
+import androidx.media3.exoplayer.audio.AudioCapabilities;
+import androidx.media3.exoplayer.audio.AudioSink;
+import androidx.media3.exoplayer.audio.DefaultAudioSink;
+import androidx.media3.exoplayer.dash.DashMediaSource; // Deprecated
+import androidx.media3.exoplayer.hls.HlsMediaSource; // Deprecated
 import androidx.media3.exoplayer.metadata.MetadataOutput;
-import androidx.media3.extractor.metadata.icy.IcyHeaders;
-import androidx.media3.extractor.metadata.icy.IcyInfo;
 import androidx.media3.exoplayer.source.ClippingMediaSource; // Deprecated
 // For some reason, this import triggers the [deprecation] warning, despite the
 // warnings being suppressed at each use.
@@ -43,15 +51,11 @@ import androidx.media3.exoplayer.source.ProgressiveMediaSource; // Deprecated
 import androidx.media3.exoplayer.source.ShuffleOrder;
 import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder;
 import androidx.media3.exoplayer.source.SilenceMediaSource; // Deprecated
-import androidx.media3.common.TrackGroup;
-import androidx.media3.exoplayer.dash.DashMediaSource; // Deprecated
-import androidx.media3.exoplayer.hls.HlsMediaSource; // Deprecated
 import androidx.media3.exoplayer.trackselection.TrackSelectionArray;
-import androidx.media3.datasource.DataSource;
-import androidx.media3.datasource.DefaultDataSource;
-import androidx.media3.datasource.DefaultHttpDataSource;
-import androidx.media3.common.MimeTypes;
 import androidx.media3.common.util.Util;
+import androidx.media3.extractor.DefaultExtractorsFactory;
+import androidx.media3.extractor.metadata.icy.IcyHeaders;
+import androidx.media3.extractor.metadata.icy.IcyInfo;
 import io.flutter.Log;
 import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.EventChannel;
@@ -106,6 +110,7 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
     private Map<String, Object> pendingPlaybackEvent;
 
     private ExoPlayer player;
+    private final KaraokeAudioProcessor karaokeAudioProcessor = new KaraokeAudioProcessor();
     private Integer audioSessionId;
     private Integer errorCode;
     private String errorMessage;
@@ -465,6 +470,13 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                 setPitch((float) ((double) ((Double) call.argument("pitch"))));
                 result.success(new HashMap<String, Object>());
                 break;
+            case "setKaraokeLevel":
+                Double karaokeLevel = call.argument("level");
+                if (karaokeLevel != null) {
+                    karaokeAudioProcessor.setLevel(karaokeLevel.floatValue());
+                }
+                result.success(null);
+                break;
             case "setSkipSilence":
                 setSkipSilenceEnabled((Boolean) call.argument("enabled"));
                 result.success(new HashMap<String, Object>());
@@ -776,8 +788,10 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
 
     private void ensurePlayerInitialized() {
         if (player == null) {
+            DefaultRenderersFactory baseRenderersFactory =
+                new KaraokeRenderersFactory(context, karaokeAudioProcessor);
             RenderersFactory renderersFactory = (eventHandler, videoListener, audioListener, textOutput, metadataOutput) -> {
-                Renderer[] defaultRenderers = new DefaultRenderersFactory(context)
+                Renderer[] defaultRenderers = baseRenderersFactory
                     .createRenderers(eventHandler, videoListener, audioListener, textOutput, metadataOutput);
                 Renderer[] allRenderers = Arrays.copyOf(defaultRenderers, defaultRenderers.length + 1);
                 allRenderers[defaultRenderers.length] = new ObserverRenderer();
@@ -1149,5 +1163,29 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
         public String getName() {
             return "ObserverRenderer";
         }
+    }
+}
+
+class KaraokeRenderersFactory extends DefaultRenderersFactory {
+
+    private final KaraokeAudioProcessor karaokeAudioProcessor;
+
+    KaraokeRenderersFactory(Context context, KaraokeAudioProcessor processor) {
+        super(context);
+        this.karaokeAudioProcessor = processor;
+    }
+
+    @Override
+    protected AudioSink buildAudioSink(
+        Context context,
+        boolean enableFloatOutput,
+        boolean enableAudioTrackPlaybackParams
+    ) {
+        DefaultAudioSink.Builder builder = new DefaultAudioSink.Builder()
+            .setAudioCapabilities(AudioCapabilities.getCapabilities(context))
+            .setAudioProcessors(new AudioProcessor[] { karaokeAudioProcessor })
+            .setEnableFloatOutput(enableFloatOutput)
+            .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams);
+        return builder.build();
     }
 }

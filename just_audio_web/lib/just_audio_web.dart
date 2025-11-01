@@ -336,6 +336,12 @@ class Html5AudioPlayer extends JustAudioPlayer {
   }
 
   @override
+  Future<SetKaraokeLevelResponse> setKaraokeLevel(
+      SetKaraokeLevelRequest request) {
+    throw UnimplementedError('setKaraokeLevel() is not supported on web.');
+  }
+
+  @override
   Future<SetLoopModeResponse> setLoopMode(SetLoopModeRequest request) async {
     _loopMode = request.loopMode;
     return SetLoopModeResponse();

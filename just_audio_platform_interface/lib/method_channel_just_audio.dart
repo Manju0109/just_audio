@@ -90,6 +90,13 @@ class MethodChannelAudioPlayer extends AudioPlayerPlatform {
   }
 
   @override
+  Future<SetKaraokeLevelResponse> setKaraokeLevel(
+      SetKaraokeLevelRequest request) async {
+    await _channel.invokeMethod<void>('setKaraokeLevel', request.toMap());
+    return SetKaraokeLevelResponse();
+  }
+
+  @override
   Future<SetSkipSilenceResponse> setSkipSilence(
       SetSkipSilenceRequest request) async {
     return SetSkipSilenceResponse.fromMap(

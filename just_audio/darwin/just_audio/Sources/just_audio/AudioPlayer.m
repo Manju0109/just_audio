@@ -7,7 +7,9 @@
 #import "./include/just_audio/ConcatenatingAudioSource.h"
 #import "./include/just_audio/LoopingAudioSource.h"
 #import "./include/just_audio/ClippingAudioSource.h"
+#import "KaraokeTap.h"
 #import <AVFoundation/AVFoundation.h>
+#import <CoreMedia/CoreMedia.h>
 #import <stdlib.h>
 #include <TargetConditionals.h>
 
@@ -51,6 +53,7 @@
     BOOL _justAdvanced;
     BOOL _enqueuedAll;
     NSDictionary<NSString *, NSObject *> *_icyMetadata;
+    KaraokeTap *_karaokeTap;
     NSNumber *_errorCode;
     NSString *_errorMessage;
 }
@@ -113,6 +116,7 @@
     _justAdvanced = NO;
     _enqueuedAll = NO;
     _icyMetadata = @{};
+    _karaokeTap = [[KaraokeTap alloc] init];
     _errorCode = (NSNumber *)[NSNull null];
     _errorMessage = (NSString *)[NSNull null];
     __weak __typeof__(self) weakSelf = self;
@@ -137,6 +141,15 @@
         } else if ([@"setVolume" isEqualToString:call.method]) {
             [self setVolume:(float)[request[@"volume"] doubleValue]];
             result(@{});
+        } else if ([@"setKaraokeLevel" isEqualToString:call.method]) {
+            NSNumber *value = request[@"level"];
+            float level = value == (id)[NSNull null] ? 0.0f : (float)[value doubleValue];
+            if (level < 0.f) level = 0.f;
+            if (level > 1.f) level = 1.f;
+            if (_karaokeTap) {
+                _karaokeTap.level = level;
+            }
+            result(nil);
         } else if ([@"setSkipSilence" isEqualToString:call.method]) {
             /// TODO on iOS side; Seems more involved, so someone with ObjectiveC experience might look at it.
             result(@{});
@@ -406,6 +419,41 @@
     [[NSNotificationCenter defaultCenter] removeObserver:self name:AVPlayerItemPlaybackStalledNotification object:playerItem];
 }
 
+- (void)applyKaraokeTapToPlayerItem:(AVPlayerItem *)playerItem {
+    if (!_karaokeTap || !_karaokeTap.tap || !playerItem) return;
+    AVAsset *asset = playerItem.asset;
+    if (!asset) return;
+    NSArray<AVAssetTrack *> *tracks = [asset tracksWithMediaType:AVMediaTypeAudio];
+    if (tracks.count == 0) return;
+    double sampleRate = 44100.0;
+    for (AVAssetTrack *track in tracks) {
+        NSArray *formatDescriptions = track.formatDescriptions;
+        if (formatDescriptions.count > 0) {
+            CMAudioFormatDescriptionRef formatDesc =
+                (__bridge CMAudioFormatDescriptionRef)formatDescriptions.firstObject;
+            const AudioStreamBasicDescription *asbd =
+                CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc);
+            if (asbd && asbd->mSampleRate > 0.0) {
+                sampleRate = asbd->mSampleRate;
+                break;
+            }
+        }
+    }
+    [_karaokeTap updateSampleRate:(float)sampleRate];
+
+    NSMutableArray<AVMutableAudioMixInputParameters *> *params =
+        [NSMutableArray arrayWithCapacity:tracks.count];
+    for (AVAssetTrack *track in tracks) {
+        AVMutableAudioMixInputParameters *inputParams =
+            [AVMutableAudioMixInputParameters audioMixInputParametersWithTrack:track];
+        inputParams.audioTapProcessor = _karaokeTap.tap;
+        [params addObject:inputParams];
+    }
+    AVMutableAudioMix *mix = [AVMutableAudioMix audioMix];
+    mix.inputParameters = params;
+    playerItem.audioMix = mix;
+}
+
 - (void)addItemObservers:(AVPlayerItem *)playerItem {
     // Get notified when the item is loaded or had an error loading
     [playerItem addObserver:self forKeyPath:@"status" options:NSKeyValueObservingOptionNew context:nil];
@@ -428,6 +476,8 @@
     // TODO: Check this. Shouldn't need to removeOutput
     // later?
     [playerItem addOutput:metadataOutput];
+
+    [self applyKaraokeTapToPlayerItem:playerItem];
 }
 
 - (void)metadataOutput:(AVPlayerItemMetadataOutput *)output didOutputTimedMetadataGroups:(NSArray<AVTimedMetadataGroup *> *)groups fromPlayerItemTrack:(AVPlayerItemTrack *)track {
@@ -663,6 +713,14 @@
         [self addItemObservers:source.playerItem];
         source.playerItem.audioSource = source;
     }
+    // --- Attach KaraokeTap to all AVPlayerItems ---
+    for (int i = 0; i < [_indexedAudioSources count]; i++) {
+        IndexedAudioSource *indexedSource = _indexedAudioSources[i];
+        [self applyKaraokeTapToPlayerItem:indexedSource.playerItem];
+        if (indexedSource.playerItem2) {
+            [self applyKaraokeTapToPlayerItem:indexedSource.playerItem2];
+        }
+    }
     [self updatePosition];
     [self updateOrder];
     // Set up an empty player
@@ -794,6 +852,7 @@
         [playerItem.audioSource onStatusChanged:status];
         switch (status) {
             case AVPlayerItemStatusReadyToPlay: {
+                [self applyKaraokeTapToPlayerItem:playerItem];
                 if (playerItem != _player.currentItem) return;
                 // Detect buffering in different ways depending on whether we're playing
                 if (_playing) {
