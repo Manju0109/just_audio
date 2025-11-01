@@ -62,6 +62,22 @@ static float KaraokeBiquadProcess(KaraokeBiquad *filter, float input) {
 
 typedef struct { __unsafe_unretained KaraokeTap *owner; } KaraokeTapContext;
 
+@interface KaraokeTap () {
+@public
+  MTAudioProcessingTapRef _tap;
+  KaraokeTapContext _ctx;
+  float _uiLevel;
+  float _level;
+  float _smoothedLevel;
+  float _sampleRate;
+  bool _filtersConfigured;
+  KaraokeBiquad _vocalBandFilter;
+  KaraokeBiquad _presenceFilter;
+  KaraokeBiquad _lowMidFilter;
+  KaraokeBiquad _lowVocalFilter;
+}
+@end
+
 static inline float clampf32(float v) { return fmaxf(-1.f, fminf(1.f, v)); }
 
 static float KaraokeTap_MapUiLevel(float uiLevel) {
@@ -304,19 +320,7 @@ static void KaraokeTap_Process(MTAudioProcessingTapRef tap,
   }
 }
 
-@implementation KaraokeTap {
-  MTAudioProcessingTapRef _tap;
-  KaraokeTapContext _ctx;
-  float _uiLevel;
-  float _level;
-  float _smoothedLevel;
-  float _sampleRate;
-  bool _filtersConfigured;
-  KaraokeBiquad _vocalBandFilter;
-  KaraokeBiquad _presenceFilter;
-  KaraokeBiquad _lowMidFilter;
-  KaraokeBiquad _lowVocalFilter;
-}
+@implementation KaraokeTap
 
 - (instancetype)init {
   if ((self = [super init])) {
