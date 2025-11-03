@@ -36,7 +36,6 @@ import androidx.media3.exoplayer.LoadControl;
 import androidx.media3.exoplayer.NoSampleRenderer;
 import androidx.media3.exoplayer.Renderer;
 import androidx.media3.exoplayer.RenderersFactory;
-import androidx.media3.exoplayer.audio.AudioCapabilities;
 import androidx.media3.exoplayer.audio.AudioSink;
 import androidx.media3.exoplayer.audio.DefaultAudioSink;
 import androidx.media3.exoplayer.dash.DashMediaSource; // Deprecated
@@ -1181,8 +1180,7 @@ class KaraokeRenderersFactory extends DefaultRenderersFactory {
         boolean enableFloatOutput,
         boolean enableAudioTrackPlaybackParams
     ) {
-        DefaultAudioSink.Builder builder = new DefaultAudioSink.Builder()
-            .setAudioCapabilities(AudioCapabilities.getCapabilities(context))
+        DefaultAudioSink.Builder builder = new DefaultAudioSink.Builder(context)
             .setAudioProcessors(new AudioProcessor[] { karaokeAudioProcessor })
             .setEnableFloatOutput(enableFloatOutput)
             .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams);
