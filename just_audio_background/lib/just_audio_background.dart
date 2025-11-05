@@ -274,8 +274,7 @@ class _JustAudioPlayer extends AudioPlayerPlatform {
 
   @override
   Future<SetWebSinkIdResponse> setWebSinkId(SetWebSinkIdRequest request) {
-    _playerAudioHandler.customSetWebSinkId(request);
-    throw SetWebSinkIdResponse();
+    return _playerAudioHandler.customSetWebSinkId(request);
   }
 
   @override
@@ -351,21 +350,6 @@ class _JustAudioPlayer extends AudioPlayerPlatform {
       _playerAudioHandler.customSetPreferredPeakBitRate(request);
 }
 
-class SetKaraokeLevelRequest {
-  final double level;
-  
-  SetKaraokeLevelRequest({required this.level});
-  
-  Map<String, dynamic> toMap() => {'level': level};
-}
-
-class SetKaraokeLevelResponse {
-  SetKaraokeLevelResponse();
-  
-  factory SetKaraokeLevelResponse.fromMap(Map<String, dynamic> map) {
-    return SetKaraokeLevelResponse();
-  }
-}
 
 class _PlayerAudioHandler extends BaseAudioHandler
     with QueueHandler, SeekHandler {
