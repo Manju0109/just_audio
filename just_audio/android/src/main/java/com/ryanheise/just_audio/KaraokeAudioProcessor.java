@@ -2,6 +2,7 @@ package com.ryanheise.just_audio;
 
 import androidx.media3.common.C;
 import androidx.media3.common.audio.AudioProcessor;
+import android.util.Log;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -54,12 +55,17 @@ final class KaraokeAudioProcessor implements AudioProcessor {
 
     @Override
     public AudioFormat configure(AudioFormat inputFormat) throws UnhandledAudioFormatException {
-        if (inputFormat.encoding != C.ENCODING_PCM_16BIT || inputFormat.channelCount != 2) {
+        if (inputFormat.encoding != C.ENCODING_PCM_16BIT ||
+            (inputFormat.channelCount != 2 && inputFormat.channelCount != 1)) {
             throw new UnhandledAudioFormatException(inputFormat);
         }
         inputAudioFormat = inputFormat;
         outputAudioFormat = inputFormat;
-        configureFilters(inputFormat.sampleRate);
+        if (inputFormat.channelCount == 2) {
+            configureFilters(inputFormat.sampleRate);
+        } else {
+            filtersConfigured = false;
+        }
         return outputAudioFormat;
     }
 
@@ -76,6 +82,15 @@ final class KaraokeAudioProcessor implements AudioProcessor {
         outBuffer.clear();
         outBuffer.limit(bytes);
         outBuffer.order(ByteOrder.LITTLE_ENDIAN);
+
+        if (inputAudioFormat.channelCount == 1) {
+            Log.d("KARAOKE", "Mono bypass active");
+            outBuffer.put(inBuffer);
+            inputBuffer.position(inputBuffer.limit());
+            outBuffer.flip();
+            outputBuffer = outBuffer;
+            return;
+        }
 
         smoothedLevel += SMOOTH_ALPHA * (targetLevel - smoothedLevel);
         final float mixLevel = smoothedLevel;

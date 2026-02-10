@@ -64,6 +64,7 @@ import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -79,6 +80,7 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
     static final String TAG = "AudioPlayer";
 
     private static Random random = new Random();
+    private static boolean loggedAudioSupport = false;
 
     private final Context context;
     private final MethodChannel methodChannel;
@@ -813,6 +815,10 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
             );
             setAudioSessionId(player.getAudioSessionId());
             player.addListener(this);
+            if (!loggedAudioSupport) {
+                loggedAudioSupport = true;
+                logAudioSupport();
+            }
         }
     }
 
@@ -829,6 +835,43 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
             pendingAudioAttributes = audioAttributes;
         } else {
             player.setAudioAttributes(audioAttributes, false);
+        }
+    }
+
+    private void logAudioSupport() {
+        final List<String> mimeTypes = Arrays.asList(
+            MimeTypes.AUDIO_VORBIS,
+            "audio/ogg",
+            MimeTypes.AUDIO_OPUS,
+            MimeTypes.AUDIO_FLAC,
+            MimeTypes.AUDIO_MPEG,
+            MimeTypes.AUDIO_AAC,
+            MimeTypes.AUDIO_WAV
+        );
+
+        try {
+            Class<?> ffmpegLibrary = Class.forName("androidx.media3.decoder.ffmpeg.FfmpegLibrary");
+            Method isAvailable = ffmpegLibrary.getMethod("isAvailable");
+            boolean available = (boolean)isAvailable.invoke(null);
+            Log.i(TAG, "[Audio] FFmpeg extension available=" + available);
+
+            Method supportsFormat = null;
+            try {
+                supportsFormat = ffmpegLibrary.getMethod("supportsFormat", String.class);
+            } catch (NoSuchMethodException e) {
+                Log.w(TAG, "[Audio] FFmpeg supportsFormat(String) not found");
+            }
+
+            if (available && supportsFormat != null) {
+                for (String mime : mimeTypes) {
+                    boolean supported = (boolean)supportsFormat.invoke(null, mime);
+                    Log.i(TAG, "[Audio] FFmpeg supports " + mime + "=" + supported);
+                }
+            }
+        } catch (ClassNotFoundException e) {
+            Log.w(TAG, "[Audio] FFmpeg extension not on classpath");
+        } catch (Exception e) {
+            Log.w(TAG, "[Audio] FFmpeg support probe failed: " + e);
         }
     }
 
@@ -1172,6 +1215,7 @@ class KaraokeRenderersFactory extends DefaultRenderersFactory {
     KaraokeRenderersFactory(Context context, KaraokeAudioProcessor processor) {
         super(context);
         this.karaokeAudioProcessor = processor;
+        setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON);
     }
 
     @Override
